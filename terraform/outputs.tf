@@ -24,3 +24,13 @@ output "aws_lb_controller_role_arn" {
   description = "ARN of the IAM role for AWS Load Balancer Controller"
   value       = aws_iam_role.aws_lb_controller.arn
 }
+
+output "cluster_name" {
+  description = "Name of the EKS cluster"
+  value       = var.cluster_name
+}
+
+output "region" {
+  description = "AWS region"
+  value       = var.aws_region
+}

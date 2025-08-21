@@ -20,11 +20,21 @@ terraform apply -auto-approve
 CLUSTER_NAME=$(terraform output -raw cluster_name)
 REGION=$(terraform output -raw region)
 
-echo "✅ EKS cluster and AWS Load Balancer Controller deployed: $CLUSTER_NAME in region $REGION"
+echo "✅ EKS cluster deployed: $CLUSTER_NAME in region $REGION"
 
 # Step 2: Configure kubectl
 echo "🔧 Configuring kubectl..."
 aws eks update-kubeconfig --region $REGION --name $CLUSTER_NAME
+
+# Step 2.5: Install AWS Load Balancer Controller
+echo "🔧 Installing AWS Load Balancer Controller..."
+LB_ROLE_ARN=$(terraform output -raw aws_lb_controller_role_arn)
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  -n kube-system \
+  --set clusterName=$CLUSTER_NAME \
+  --set serviceAccount.create=true \
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$LB_ROLE_ARN
 
 # Step 3: Install ArgoCD
 echo "🔄 Installing ArgoCD..."
