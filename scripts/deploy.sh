@@ -7,6 +7,12 @@ echo "🚀 Starting Netflix Clone Deployment to EKS with ArgoCD"
 # Step 1: Deploy EKS Infrastructure
 echo "📦 Deploying EKS infrastructure with Terraform..."
 cd terraform
+
+# Add Helm repository
+echo "📚 Adding Helm repositories..."
+helm repo add eks https://aws.github.io/eks-charts
+helm repo update
+
 terraform init
 terraform apply -auto-approve
 
