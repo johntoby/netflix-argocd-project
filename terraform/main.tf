@@ -1,78 +1,241 @@
-data "aws_availability_zones" "available" {
-  filter {
-    name   = "opt-in-status"
-    values = ["opt-in-not-required"]
-  }
-}
+# main.tf
 
-locals {
-  cluster_name = "netflix-eks-cluster"
-}
-
+# VPC Module
 module "vpc" {
-  source = "terraform-aws-modules/vpc/aws"
+  source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
 
-  name = "netflix-vpc"
-  cidr = "10.0.0.0/16"
+  name = "${var.cluster_name}-vpc"
+  cidr = var.vpc_cidr
 
-  azs             = slice(data.aws_availability_zones.available.names, 0, 3)
-  private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
-  public_subnets  = ["10.0.4.0/24", "10.0.5.0/24", "10.0.6.0/24"]
+  azs             = ["${var.aws_region}a", "${var.aws_region}b", "${var.aws_region}c"]
+  private_subnets = var.private_subnets
+  public_subnets  = var.public_subnets
 
-  enable_nat_gateway   = true
-  single_nat_gateway   = true
-  enable_dns_hostnames = true
+  enable_nat_gateway = true
+  single_nat_gateway = true
+  enable_vpn_gateway = false
 
   public_subnet_tags = {
-    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
-    "kubernetes.io/role/elb"                      = 1
+    "kubernetes.io/role/elb" = 1
   }
 
   private_subnet_tags = {
-    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
-    "kubernetes.io/role/internal-elb"             = 1
+    "kubernetes.io/role/internal-elb" = 1
+  }
+
+  tags = {
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }
 }
 
+# EKS Module
 module "eks" {
-  source = "terraform-aws-modules/eks/aws"
-  version = "~> 19.0"
+  source  = "terraform-aws-modules/eks/aws"
+  version = "~> 20.0"
 
-  cluster_name    = local.cluster_name
-  cluster_version = "1.28"
+  cluster_name    = var.cluster_name
+  cluster_version = var.cluster_version
 
-  vpc_id                         = module.vpc.vpc_id
-  subnet_ids                     = module.vpc.private_subnets
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnets
+
   cluster_endpoint_public_access = true
 
-  # Disable aws-auth configmap management to avoid cycle
-  manage_aws_auth_configmap = false
-
-  # OIDC Identity provider
-  cluster_identity_providers = {
-    sts = {
-      client_id = "sts.amazonaws.com"
+  eks_managed_node_groups = {
+    default = {
+      instance_types = var.instance_types
+      min_size     = var.min_size
+      max_size     = var.max_size
+      desired_size = var.desired_size
     }
   }
 
-  eks_managed_node_groups = {
-    one = {
-      name = "node-group-1"
+  # Enable cluster addons
+  cluster_addons = {
+    coredns                = {}
+    kube-proxy             = {}
+    vpc-cni                = {}
+    aws-ebs-csi-driver     = {}
+  }
 
-      instance_types = ["t3.medium"]
+  tags = {
+    Environment = "production"
+  }
+}
 
-      min_size     = 1
-      max_size     = 3
-      desired_size = 2
+# IAM Policy for AWS Load Balancer Controller
+data "aws_iam_policy_document" "aws_lb_controller" {
+  statement {
+    effect    = "Allow"
+    actions   = [
+      "iam:CreateServiceLinkedRole",
+      "ec2:DescribeAccountAttributes",
+      "ec2:DescribeAddresses",
+      "ec2:DescribeAvailabilityZones",
+      "ec2:DescribeInternetGateways",
+      "ec2:DescribeVpcs",
+      "ec2:DescribeVpcPeeringConnections",
+      "ec2:DescribeSubnets",
+      "ec2:DescribeSecurityGroups",
+      "ec2:DescribeInstances",
+      "ec2:DescribeNetworkInterfaces",
+      "ec2:DescribeTags",
+      "ec2:GetCoipPoolUsage",
+      "ec2:DescribeCoipPools",
+      "elasticloadbalancing:DescribeLoadBalancers",
+      "elasticloadbalancing:DescribeLoadBalancerAttributes",
+      "elasticloadbalancing:DescribeListeners",
+      "elasticloadbalancing:DescribeListenerCertificates",
+      "elasticloadbalancing:DescribeSSLPolicies",
+      "elasticloadbalancing:DescribeRules",
+      "elasticloadbalancing:DescribeTargetGroups",
+      "elasticloadbalancing:DescribeTargetGroupAttributes",
+      "elasticloadbalancing:DescribeTargetHealth",
+      "elasticloadbalancing:DescribeTags",
+      "shield:GetSubscriptionState",
+      "shield:DescribeProtection",
+      "shield:CreateProtection",
+      "shield:DeleteProtection",
+      "wafv2:GetWebACL",
+      "wafv2:GetWebACLForResource",
+      "wafv2:AssociateWebACL",
+      "wafv2:DisassociateWebACL",
+      "wafv2:ListResourcesForWebACL",
+      "waf-regional:GetWebACL",
+      "waf-regional:GetWebACLForResource",
+      "waf-regional:AssociateWebACL",
+      "waf-regional:DisassociateWebACL",
+      "waf-regional:ListResourcesForWebACL",
+      "ec2:AuthorizeSecurityGroupIngress",
+      "ec2:RevokeSecurityGroupIngress",
+      "ec2:CreateSecurityGroup",
+      "ec2:CreateTags",
+      "ec2:DeleteTags",
+      "ec2:AuthorizeSecurityGroupIngress",
+      "ec2:RevokeSecurityGroupIngress",
+      "ec2:DeleteSecurityGroup",
+      "elasticloadbalancing:CreateLoadBalancer",
+      "elasticloadbalancing:CreateTargetGroup",
+      "elasticloadbalancing:CreateListener",
+      "elasticloadbalancing:DeleteListener",
+      "elasticloadbalancing:CreateRule",
+      "elasticloadbalancing:DeleteRule",
+      "elasticloadbalancing:AddTags",
+      "elasticloadbalancing:RemoveTags",
+      "elasticloadbalancing:ModifyLoadBalancerAttributes",
+      "elasticloadbalancing:SetIpAddressType",
+      "elasticloadbalancing:SetSecurityGroups",
+      "elasticloadbalancing:SetSubnets",
+      "elasticloadbalancing:DeleteLoadBalancer",
+      "elasticloadbalancing:ModifyTargetGroup",
+      "elasticloadbalancing:ModifyTargetGroupAttributes",
+      "elasticloadbalancing:DeleteTargetGroup",
+      "elasticloadbalancing:RegisterTargets",
+      "elasticloadbalancing:DeregisterTargets",
+      "elasticloadbalancing:ModifyListener",
+      "elasticloadbalancing:SetWebAcl",
+      "elasticloadbalancing:ModifyRule",
+      "elasticloadbalancing:AddListenerCertificates",
+      "elasticloadbalancing:RemoveListenerCertificates",
+      "elasticloadbalancing:ModifyLoadBalancerAttributes"
+    ]
+    resources = ["*"]
+  }
+}
 
-      # Required for AWS Load Balancer Controller
-      iam_role_additional_policies = {
-        AmazonEKSWorkerNodePolicy          = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-        AmazonEKS_CNI_Policy               = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-        AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-      }
+resource "aws_iam_policy" "aws_lb_controller" {
+  name        = "${var.cluster_name}-aws-lb-controller"
+  path        = "/"
+  description = "Policy for AWS Load Balancer Controller"
+  policy      = data.aws_iam_policy_document.aws_lb_controller.json
+}
+
+# IAM Role for AWS Load Balancer Controller
+data "aws_iam_policy_document" "aws_lb_controller_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect  = "Allow"
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(module.eks.oidc_provider, "https://", "")}:sub"
+      values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(module.eks.oidc_provider, "https://", "")}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    principals {
+      identifiers = [module.eks.oidc_provider_arn]
+      type        = "Federated"
     }
   }
 }
 
+resource "aws_iam_role" "aws_lb_controller" {
+  assume_role_policy = data.aws_iam_policy_document.aws_lb_controller_assume_role.json
+  name               = "${var.cluster_name}-aws-lb-controller"
+}
+
+resource "aws_iam_role_policy_attachment" "aws_lb_controller" {
+  policy_arn = aws_iam_policy.aws_lb_controller.arn
+  role       = aws_iam_role.aws_lb_controller.name
+}
+
+# Kubernetes Provider Configuration
+provider "kubernetes" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    args        = ["eks", "get-token", "--cluster-name", var.cluster_name]
+    command     = "aws"
+  }
+}
+
+# Helm Provider Configuration
+provider "helm" {
+  kubernetes {
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      args        = ["eks", "get-token", "--cluster-name", var.cluster_name]
+      command     = "aws"
+    }
+  }
+}
+
+# Install AWS Load Balancer Controller via Helm
+resource "helm_release" "aws_lb_controller" {
+  name       = "aws-load-balancer-controller"
+  repository = "https://aws.github.io/eks-charts"
+  chart      = "aws-load-balancer-controller"
+  namespace  = "kube-system"
+
+  set {
+    name  = "clusterName"
+    value = var.cluster_name
+  }
+
+  set {
+    name  = "serviceAccount.create"
+    value = "true"
+  }
+
+  set {
+    name  = "serviceAccount.name"
+    value = "aws-load-balancer-controller"
+  }
+
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.aws_lb_controller.arn
+  }
+
+  depends_on = [module.eks]
+}

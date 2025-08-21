@@ -10,15 +10,11 @@ cd terraform
 terraform init
 terraform apply -auto-approve
 
-# Get cluster info
-CLUSTER_NAME="netflix-eks-cluster"
-REGION="us-west-2"
+# Get cluster info from terraform outputs
+CLUSTER_NAME=$(terraform output -raw cluster_name)
+REGION=$(terraform output -raw region)
 
-echo "✅ EKS cluster created: $CLUSTER_NAME in region $REGION"
-
-# Step 1.5: Deploy AWS Load Balancer Controller
-echo "🔧 Deploying AWS Load Balancer Controller..."
-terraform apply -target=module.load_balancer_controller_irsa_role -target=kubernetes_service_account.service_account -target=helm_release.aws_load_balancer_controller -auto-approve
+echo "✅ EKS cluster and AWS Load Balancer Controller deployed: $CLUSTER_NAME in region $REGION"
 
 # Step 2: Configure kubectl
 echo "🔧 Configuring kubectl..."
