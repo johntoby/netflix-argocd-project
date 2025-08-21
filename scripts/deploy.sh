@@ -36,6 +36,10 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
   --set serviceAccount.name=aws-load-balancer-controller \
   --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$LB_ROLE_ARN
 
+# Wait for AWS Load Balancer Controller to be ready
+echo "⏳ Waiting for AWS Load Balancer Controller to be ready..."
+kubectl wait --for=condition=available --timeout=300s deployment/aws-load-balancer-controller -n kube-system
+
 # Step 3: Install ArgoCD
 echo "🔄 Installing ArgoCD..."
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
