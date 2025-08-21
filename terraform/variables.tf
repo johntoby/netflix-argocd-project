@@ -39,7 +39,7 @@ variable "public_subnets" {
 variable "instance_types" {
   description = "Instance types for EKS nodes"
   type        = list(string)
-  default     = ["2.medium"]
+  default     = ["t2.medium"]
 }
 
 variable "desired_size" {
