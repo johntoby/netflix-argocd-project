@@ -96,6 +96,8 @@ data "aws_iam_policy_document" "aws_lb_controller" {
       "elasticloadbalancing:DescribeTargetGroupAttributes",
       "elasticloadbalancing:DescribeTargetHealth",
       "elasticloadbalancing:DescribeTags",
+      "elasticloadbalancing:DescribeListenerAttributes",
+      "elasticloadbalancing:ModifyListenerAttributes",
       "shield:GetSubscriptionState",
       "shield:DescribeProtection",
       "shield:CreateProtection",
