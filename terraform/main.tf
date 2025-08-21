@@ -92,6 +92,9 @@ module "eks" {
   subnet_ids                     = module.vpc.private_subnets
   cluster_endpoint_public_access = true
 
+  # Disable aws-auth configmap management to avoid cycle
+  manage_aws_auth_configmap = false
+
   # OIDC Identity provider
   cluster_identity_providers = {
     sts = {
