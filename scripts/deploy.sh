@@ -8,14 +8,17 @@ echo "🚀 Starting Netflix Clone Deployment to EKS with ArgoCD"
 echo "📦 Deploying EKS infrastructure with Terraform..."
 cd terraform
 terraform init
-terraform plan
 terraform apply -auto-approve
 
 # Get cluster info
-CLUSTER_NAME=$(terraform output -raw cluster_name)
-REGION=$(terraform output -raw region)
+CLUSTER_NAME="netflix-eks-cluster"
+REGION="us-west-2"
 
 echo "✅ EKS cluster created: $CLUSTER_NAME in region $REGION"
+
+# Step 1.5: Deploy AWS Load Balancer Controller
+echo "🔧 Deploying AWS Load Balancer Controller..."
+terraform apply -target=module.load_balancer_controller_irsa_role -target=kubernetes_service_account.service_account -target=helm_release.aws_load_balancer_controller -auto-approve
 
 # Step 2: Configure kubectl
 echo "🔧 Configuring kubectl..."
