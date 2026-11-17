@@ -1,12 +1,15 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
+
+# Resolve paths relative to the repo root so the script works from any directory
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "🚀 Starting Netflix Clone Deployment to EKS with ArgoCD"
 
 # Step 1: Deploy EKS Infrastructure
 echo "📦 Deploying EKS infrastructure with Terraform..."
-cd terraform
+cd "$REPO_ROOT/terraform"
 
 # Add Helm repository
 echo "📚 Adding Helm repositories..."
@@ -24,30 +27,19 @@ echo "✅ EKS cluster deployed: $CLUSTER_NAME in region $REGION"
 
 # Step 2: Configure kubectl
 echo "🔧 Configuring kubectl..."
-aws eks update-kubeconfig --region $REGION --name $CLUSTER_NAME
+aws eks update-kubeconfig --region "$REGION" --name "$CLUSTER_NAME"
 
 # Step 2.5: Install AWS Load Balancer Controller
 echo "🔧 Installing AWS Load Balancer Controller..."
 LB_ROLE_ARN=$(terraform output -raw aws_lb_controller_role_arn)
 
-# Check if already installed, if so upgrade, otherwise install
-if helm list -n kube-system | grep -q aws-load-balancer-controller; then
-  echo "AWS Load Balancer Controller already exists, upgrading..."
-  helm upgrade aws-load-balancer-controller eks/aws-load-balancer-controller \
-    -n kube-system \
-    --set clusterName=$CLUSTER_NAME \
-    --set serviceAccount.create=true \
-    --set serviceAccount.name=aws-load-balancer-controller \
-    --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$LB_ROLE_ARN
-else
-  echo "Installing AWS Load Balancer Controller..."
-  helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
-    -n kube-system \
-    --set clusterName=$CLUSTER_NAME \
-    --set serviceAccount.create=true \
-    --set serviceAccount.name=aws-load-balancer-controller \
-    --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$LB_ROLE_ARN
-fi
+# Install or upgrade in one idempotent step (safe to re-run)
+helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  -n kube-system \
+  --set clusterName="$CLUSTER_NAME" \
+  --set serviceAccount.create=true \
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="$LB_ROLE_ARN"
 
 # Wait for AWS Load Balancer Controller to be ready
 echo "⏳ Waiting for AWS Load Balancer Controller to be ready..."
@@ -71,6 +63,7 @@ echo "ArgoCD Admin Password: $ARGOCD_PASSWORD"
 echo "🌐 Setting up ArgoCD port forward..."
 kubectl port-forward svc/argocd-server -n argocd 8080:443 &
 PORTFORWARD_PID=$!
+trap 'kill "$PORTFORWARD_PID" 2>/dev/null || true' EXIT
 
 echo "ArgoCD UI available at: https://localhost:8080"
 echo "Username: admin"
@@ -78,8 +71,7 @@ echo "Password: $ARGOCD_PASSWORD"
 
 # Step 6: Deploy Netflix application via ArgoCD
 echo "🎬 Deploying Netflix application..."
-cd ../argocd
-kubectl apply -f application.yaml
+kubectl apply -f "$REPO_ROOT/argocd/application.yaml"
 
 echo "✅ Deployment completed!"
 echo ""
@@ -93,9 +85,9 @@ echo ""
 echo "🔍 To check Netflix service status:"
 echo "kubectl get svc netflix-service -n netflix"
 echo ""
-echo "🌐 To get LoadBalancer URL:"
-echo "kubectl get svc netflix-service -n netflix -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'"
+echo "🌐 netflix-service is ClusterIP (not internet-facing). To open the app locally:"
+echo "kubectl port-forward svc/netflix-service -n netflix 8081:80   # then http://localhost:8081"
 
 # Keep port forward running
 echo "Press Ctrl+C to stop port forwarding and exit"
-wait $PORTFORWARD_PID
+wait "$PORTFORWARD_PID"
