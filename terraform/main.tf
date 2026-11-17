@@ -44,22 +44,22 @@ module "eks" {
 
   # Enable EKS access entries
   enable_cluster_creator_admin_permissions = true
-  
+
   eks_managed_node_groups = {
     default = {
       instance_types = var.instance_types
-      min_size     = var.min_size
-      max_size     = var.max_size
-      desired_size = var.desired_size
+      min_size       = var.min_size
+      max_size       = var.max_size
+      desired_size   = var.desired_size
     }
   }
 
   # Enable cluster addons
   cluster_addons = {
-    coredns                = {}
-    kube-proxy             = {}
-    vpc-cni                = {}
-    aws-ebs-csi-driver     = {}
+    coredns            = {}
+    kube-proxy         = {}
+    vpc-cni            = {}
+    aws-ebs-csi-driver = {}
   }
 
   tags = {
@@ -70,8 +70,8 @@ module "eks" {
 # IAM Policy for AWS Load Balancer Controller
 data "aws_iam_policy_document" "aws_lb_controller" {
   statement {
-    effect    = "Allow"
-    actions   = [
+    effect = "Allow"
+    actions = [
       "iam:CreateServiceLinkedRole",
       "ec2:DescribeAccountAttributes",
       "ec2:DescribeAddresses",
@@ -117,8 +117,6 @@ data "aws_iam_policy_document" "aws_lb_controller" {
       "ec2:CreateSecurityGroup",
       "ec2:CreateTags",
       "ec2:DeleteTags",
-      "ec2:AuthorizeSecurityGroupIngress",
-      "ec2:RevokeSecurityGroupIngress",
       "ec2:DeleteSecurityGroup",
       "elasticloadbalancing:CreateLoadBalancer",
       "elasticloadbalancing:CreateTargetGroup",
@@ -142,8 +140,7 @@ data "aws_iam_policy_document" "aws_lb_controller" {
       "elasticloadbalancing:SetWebAcl",
       "elasticloadbalancing:ModifyRule",
       "elasticloadbalancing:AddListenerCertificates",
-      "elasticloadbalancing:RemoveListenerCertificates",
-      "elasticloadbalancing:ModifyLoadBalancerAttributes"
+      "elasticloadbalancing:RemoveListenerCertificates"
     ]
     resources = ["*"]
   }
