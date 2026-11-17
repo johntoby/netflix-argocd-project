@@ -1,0 +1,5 @@
+# Keep shell scripts LF so they run in bash even when checked out on Windows
+*.sh text eol=lf
+*.tf text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf

@@ -1,9 +1,21 @@
 # Terraform
+.terraform/
 *.tfstate
 *.tfstate.*
-.terraform/
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 .terraform.lock.hcl
 terraform.tfvars
+*.auto.tfvars
+
+# Kubernetes credentials
+kubeconfig
+*.kubeconfig
 
 # IDE
 .vscode/
